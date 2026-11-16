@@ -1,0 +1,35 @@
+name: api-test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: pip install requests PyYAML Jinja2 jsonschema
+
+      - name: 启动被测服务
+        run: |
+          docker run -d --name target -p 8090:8090 \
+            -e SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/demo \
+            ghcr.io/example/code-review-agent:latest || echo "镜像不存在，跳过"
+
+      - name: 执行冒烟用例
+        run: python -m api_testkit.cli run cases/smoke.yaml --env env/dev.yaml --workers 2
+
+      - name: 上传报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: reports/
