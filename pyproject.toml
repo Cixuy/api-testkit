@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "api-testkit"
+version = "1.0.0"
+description = "数据驱动的接口自动化测试框架"
+requires-python = ">=3.9"
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+    "Jinja2>=3.1",
+    "jsonschema>=4.20",
+]
+
+[project.scripts]
+apitest = "api_testkit.cli:main"
+
+[tool.setuptools]
+packages = ["api_testkit"]
