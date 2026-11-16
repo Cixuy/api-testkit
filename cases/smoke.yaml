@@ -1,0 +1,106 @@
+# 针对 code-review-agent 的接口冒烟用例
+cases:
+  - name: 提交评审返回问题清单
+    tags: [smoke, review]
+    steps:
+      - name: 提交一段有明显问题的代码
+        request:
+          method: POST
+          url: ${base_url}/api/reviews
+          headers: ${default_headers}
+          json:
+            repoName: demo-repo
+            fileName: Demo.java
+            commitRef: main
+            code: "public class Demo {\n  String password = \"abc123456\";\n  void f() {\n    try { g(); } catch (Exception e) {}\n    int r = 250;\n  }\n}"
+        assert:
+          - status:
+              expect: 200
+          - jsonpath:
+              path: code
+              equals: 0
+          - gte:
+              path: data.task.issueCount
+              value: 1
+          - contains:
+              text: MAGIC_NUMBER
+          - response_time:
+              max_ms: 5000
+        extract:
+          task_id: data.task.id
+          issue_count: data.task.issueCount
+
+      - name: 用上一步的任务号查详情
+        depends_on: 提交一段有明显问题的代码
+        request:
+          method: GET
+          url: ${base_url}/api/reviews/${task_id}
+        assert:
+          - status:
+              expect: 200
+          - jsonpath:
+              path: data.task.id
+              equals: ${task_id}
+          - exists:
+              path: data.issues.0.severity
+          - schema:
+              schema:
+                type: object
+                required: [code, data]
+                properties:
+                  code: {type: integer}
+                  data:
+                    type: object
+                    required: [task, issues]
+                    properties:
+                      task:
+                        type: object
+                        required: [id, fileName, issueCount]
+                      issues:
+                        type: array
+                        minItems: 1
+
+  - name: 空代码应被拒绝
+    tags: [negative]
+    steps:
+      - name: 提交空内容
+        request:
+          method: POST
+          url: ${base_url}/api/reviews
+          headers: ${default_headers}
+          json:
+            repoName: demo-repo
+            fileName: Empty.java
+            code: ""
+        assert:
+          - status:
+              expect: 200
+          - jsonpath:
+              path: code
+              equals: 400
+          - contains:
+              text: 代码内容不能为空
+
+  - name: 历史列表可分页
+    tags: [smoke]
+    steps:
+      - name: 查询第一页
+        request:
+          method: GET
+          url: ${base_url}/api/reviews?page=1&size=5
+        assert:
+          - status:
+              expect: 200
+          - exists:
+              path: data.total
+          - schema:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [list, total, page, size]
+                    properties:
+                      list: {type: array}
+                      total: {type: integer}
+                      page: {type: integer}

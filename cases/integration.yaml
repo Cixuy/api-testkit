@@ -1,0 +1,49 @@
+# 依赖 C++ 静态分析服务（code-insight，18080）的集成用例。
+# 该服务未启动时本文件会失败，属于预期行为；冒烟用例不依赖它。
+cases:
+  - name: 双来源结果合并
+    tags: [integration]
+    steps:
+      - name: 提交含硬编码与空 catch 的代码
+        request:
+          method: POST
+          url: ${base_url}/api/reviews
+          headers: ${default_headers}
+          json:
+            repoName: demo-repo
+            fileName: Demo.java
+            commitRef: main
+            code: "public class Demo {\n  String password = \"abc123456\";\n  void f() {\n    try { g(); } catch (Exception e) {}\n    int r = 250;\n  }\n}"
+        assert:
+          - status:
+              expect: 200
+          - jsonpath:
+              path: data.staticServiceUsed
+              equals: true
+          - jsonpath:
+              path: data.task.issueCount
+              equals: 3
+          - contains:
+              text: SECRET_HARDCODED
+          - contains:
+              text: EMPTY_CATCH
+          - contains:
+              text: MAGIC_NUMBER
+        extract:
+          task_id: data.task.id
+
+      - name: 详情里的严重度顺序正确
+        depends_on: 提交含硬编码与空 catch 的代码
+        request:
+          method: GET
+          url: ${base_url}/api/reviews/${task_id}
+        assert:
+          - jsonpath:
+              path: data.issues.0.severity
+              equals: critical
+          - jsonpath:
+              path: data.issues.0.ruleId
+              equals: SECRET_HARDCODED
+          - jsonpath:
+              path: data.issues.2.source
+              equals: RULE
