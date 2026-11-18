@@ -74,7 +74,20 @@ python -m api_testkit.cli run cases/smoke.yaml --env env/dev.yaml --workers 4 --
 
 # 只跑带指定标签的用例
 python -m api_testkit.cli run cases/smoke.yaml --tag smoke
+
+# 只列清单，不发请求（--tag 过滤同样生效）
+python -m api_testkit.cli run cases/smoke.yaml --list
 ```
+
+```
+cases/smoke.yaml：3 个用例
+  提交评审返回问题清单       tag=smoke,review       步骤 2
+  空代码应被拒绝             tag=negative           步骤 1
+  历史列表可分页             tag=smoke              步骤 1
+```
+
+`--list` 是为两个场景加的：一是 CI 里先落一份"用例清单"快照，用例被误删/漏加能立刻看出来；
+二是排查"为什么这个用例没跑"——多数情况是被 `--tag` 过滤掉了，而不是文件名写错。
 
 输出：
 
