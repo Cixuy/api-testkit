@@ -19,6 +19,16 @@ def load_cases(path: str) -> list[dict]:
     return data.get("cases", [])
 
 
+def _dw(s: str) -> int:
+    """按终端显示宽度算长度：中日韩字符占两列，否则对齐会歪。"""
+    import unicodedata
+    return sum(2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1 for ch in s)
+
+
+def _pad(s: str, width: int) -> str:
+    return s + " " * max(0, width - _dw(s))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="apitest", description="接口自动化测试框架")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -32,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--timeout", type=int, default=10, help="单请求超时秒数")
     run.add_argument("--fail-fast", action="store_true", help="首个用例失败即停止")
     run.add_argument("--out", default="reports", help="报告输出目录")
+    run.add_argument("--list", action="store_true", help="只列出用例（名称/tag/步骤数），不发任何请求")
     return parser
 
 
@@ -49,6 +60,16 @@ def main(argv=None) -> int:
     if not cases:
         print("没有匹配的用例")
         return 1
+
+    # --list：先看清要跑什么再决定跑不跑。CI 里可以用它做"用例清单"快照，
+    # 也方便排查"为什么这个用例没被执行"（tag 过滤掉了？文件名写错了？）
+    if args.list:
+        print(f"{args.case_file}：{len(cases)} 个用例")
+        for c in cases:
+            tags = ",".join(c.get("tags", [])) or "-"
+            steps = len(c.get("steps", []))
+            print(f"  {_pad(str(c.get('name', '(未命名)')), 26)} tag={_pad(tags, 18)} 步骤 {steps}")
+        return 0
 
     runner = Runner(env=env, timeout=args.timeout, retries=args.retries)
     started = time.perf_counter()
