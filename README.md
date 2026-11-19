@@ -103,6 +103,20 @@ JUnit reports/junit.xml
 
 退出码：全部通过返回 0，有失败返回 2，方便直接接 CI。
 
+用例文件本身有问题时（路径写错、YAML 语法错、顶层不是映射、`cases` 不是列表）也是退码 2，
+但输出是一行可读的 `错误：...`，而不是 Python traceback——YAML 语法错还会带上出错的行列号：
+
+```bash
+$ python -m api_testkit.cli run cases/smoke.yml --list
+错误：用例文件不存在：cases/smoke.yml
+
+$ python -m api_testkit.cli run cases/broken.yaml --list
+错误：用例文件 YAML 解析失败：cases/broken.yaml（第 2 行第 1 列）
+  expected the node content, but found '<stream end>'
+```
+
+这样在流水线里日志会直接指出是哪个文件、哪一行读不进来，不需要从 traceback 里翻调用栈。
+
 ## 报告
 
 ![测试报告](docs/screenshots/report.png)
