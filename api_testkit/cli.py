@@ -13,10 +13,27 @@ from .report import write_html, write_junit
 from .runner import Runner
 
 
+class CaseFileError(Exception):
+    """用例文件层面的问题（不存在 / 语法错 / 结构不对），由 main 统一转成退码 2。"""
+
+
 def load_cases(path: str) -> list[dict]:
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
-    return data.get("cases", [])
+    """读用例文件。路径写错 / YAML 语法错时给一行可读的报错，不抛 traceback。"""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        raise CaseFileError(f"用例文件不存在：{path}")
+    except yaml.YAMLError as e:
+        mark = getattr(e, "problem_mark", None)
+        where = f"（第 {mark.line + 1} 行第 {mark.column + 1} 列）" if mark else ""
+        raise CaseFileError(f"用例文件 YAML 解析失败：{path}{where}\n  {getattr(e, 'problem', e)}")
+    if not isinstance(data, dict):
+        raise CaseFileError(f"用例文件顶层应为映射（含 cases 键）：{path}")
+    cases = data.get("cases", [])
+    if not isinstance(cases, list):
+        raise CaseFileError(f"cases 应为列表：{path}")
+    return cases
 
 
 def _dw(s: str) -> int:
@@ -52,7 +69,11 @@ def main(argv=None) -> int:
         return 1
 
     env = load_env_file(args.env) if args.env else {}
-    cases = load_cases(args.case_file)
+    try:
+        cases = load_cases(args.case_file)
+    except CaseFileError as e:
+        print(f"错误：{e}", file=sys.stderr)
+        return 2
 
     if args.tag:
         wanted = set(args.tag)
