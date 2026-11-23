@@ -17,6 +17,26 @@ class CaseFileError(Exception):
     """用例文件层面的问题（不存在 / 语法错 / 结构不对），由 main 统一转成退码 2。"""
 
 
+def _normalize_tags(raw, case_name: str) -> list[str]:
+    """tags 允许写成 ["smoke","review"]，也允许 `tags: smoke` 或 `tags: smoke, review`。
+
+    YAML 里手写时很容易漏掉方括号，而字符串是可迭代的：不归一化的话
+    --list 会显示成 s,m,o,k,e，--tag smoke 又一条都筛不出来，看着像「用例丢了」。
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        return [t.strip() for t in raw.split(",") if t.strip()]
+    if isinstance(raw, (list, tuple)):
+        out = []
+        for t in raw:
+            if not isinstance(t, (str, int, float)):
+                raise CaseFileError(f"用例「{case_name}」的 tags 里有非法元素：{t!r}")
+            out.append(str(t).strip())
+        return [t for t in out if t]
+    raise CaseFileError(f"用例「{case_name}」的 tags 应为列表或字符串，当前是 {type(raw).__name__}")
+
+
 def load_cases(path: str) -> list[dict]:
     """读用例文件。路径写错 / YAML 语法错时给一行可读的报错，不抛 traceback。"""
     try:
@@ -33,6 +53,10 @@ def load_cases(path: str) -> list[dict]:
     cases = data.get("cases", [])
     if not isinstance(cases, list):
         raise CaseFileError(f"cases 应为列表：{path}")
+    for c in cases:
+        if not isinstance(c, dict):
+            raise CaseFileError(f"cases 里每一项都应是映射，发现 {type(c).__name__}：{path}")
+        c["tags"] = _normalize_tags(c.get("tags"), str(c.get("name", "(未命名)")))
     return cases
 
 
