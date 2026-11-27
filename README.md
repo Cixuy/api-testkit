@@ -63,6 +63,9 @@ cases:
 
 路径支持 `data.issues.0.severity` 这种数组下标写法，不用引入 jsonpath 依赖。
 
+每种断言的字段在加载时就校验（漏 `equals`、类型拼错、`assert:` 写成映射、正则写坏），
+报错带用例名与步骤名、退码 2，不会等发完请求才炸 KeyError：`错误：用例「X」步骤「取列表」的 jsonpath 缺少字段 equals`。
+
 ## 执行
 
 ```bash

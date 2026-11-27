@@ -77,3 +77,15 @@ def check(kind: str, actual_response, spec: dict) -> tuple[bool, str]:
 
 
 SUPPORTED = ("status", "jsonpath", "gte", "exists", "contains", "regex", "schema", "response_time")
+
+# 每种断言的必需字段：check() 直接下标取，少一个就 KeyError，故加载阶段按此表校验
+REQUIRED = {
+    "status": ("expect",),
+    "jsonpath": ("path", "equals"),
+    "gte": ("path", "value"),
+    "exists": ("path",),
+    "contains": ("text",),
+    "regex": ("pattern",),
+    "schema": ("schema",),
+    "response_time": ("max_ms",),
+}

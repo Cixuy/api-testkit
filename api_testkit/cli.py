@@ -1,6 +1,7 @@
 """命令行入口：apitest run cases/smoke.yaml --env env/dev.yaml"""
 
 import argparse
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -8,6 +9,7 @@ from pathlib import Path
 
 import yaml
 
+from .assertions import REQUIRED
 from .context import load_env_file
 from .report import write_html, write_junit
 from .runner import Runner
@@ -37,6 +39,35 @@ def _normalize_tags(raw, case_name: str) -> list[str]:
     raise CaseFileError(f"用例「{case_name}」的 tags 应为列表或字符串，当前是 {type(raw).__name__}")
 
 
+def _invalid(case_name: str, sname: str, msg: str):
+    raise CaseFileError(f"用例「{case_name}」步骤「{sname}」{msg}")
+
+
+def _validate_asserts(case_name: str, steps) -> None:
+    """断言写错在发请求前拦下：原先漏一个 `equals` 就是 KeyError traceback，整个 run 中断。"""
+    if not isinstance(steps, list) or not all(isinstance(s, dict) for s in steps):
+        raise CaseFileError(f"用例「{case_name}」的 steps 应是步骤映射构成的列表")
+    for step in steps:
+        sname = step.get("name", "(未命名步骤)")
+        raw = step.get("assert") or []
+        if not isinstance(raw, list):
+            _invalid(case_name, sname, f"的 assert 应为列表，每项一个断言，当前是 {type(raw).__name__}")
+        for item in raw:
+            if not isinstance(item, dict) or len(item) != 1:
+                _invalid(case_name, sname, f"的断言应写成「类型: 参数」的单键映射，实际是 {item!r}")
+            kind, payload = next(iter(item.items()))
+            if kind not in REQUIRED:
+                _invalid(case_name, sname, f"未知断言类型 {kind!r}，支持：{'/'.join(REQUIRED)}")
+            missing = [k for k in REQUIRED[kind] if k not in payload]
+            if missing:
+                _invalid(case_name, sname, f"的 {kind} 缺少字段 {'/'.join(missing)}")
+            if kind == "regex":
+                try:
+                    re.compile(payload["pattern"])
+                except re.error as e:
+                    _invalid(case_name, sname, f"的正则不合法：{e}")
+
+
 def load_cases(path: str) -> list[dict]:
     """读用例文件。路径写错 / YAML 语法错时给一行可读的报错，不抛 traceback。"""
     try:
@@ -56,7 +87,9 @@ def load_cases(path: str) -> list[dict]:
     for c in cases:
         if not isinstance(c, dict):
             raise CaseFileError(f"cases 里每一项都应是映射，发现 {type(c).__name__}：{path}")
-        c["tags"] = _normalize_tags(c.get("tags"), str(c.get("name", "(未命名)")))
+        name = str(c.get("name", "(未命名)"))
+        c["tags"] = _normalize_tags(c.get("tags"), name)
+        _validate_asserts(name, c.get("steps", []))
     return cases
 
 
