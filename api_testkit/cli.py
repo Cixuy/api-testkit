@@ -47,8 +47,12 @@ def _validate_asserts(case_name: str, steps) -> None:
     """断言写错在发请求前拦下：原先漏一个 `equals` 就是 KeyError traceback，整个 run 中断。"""
     if not isinstance(steps, list) or not all(isinstance(s, dict) for s in steps):
         raise CaseFileError(f"用例「{case_name}」的 steps 应是步骤映射构成的列表")
+    names = {s.get("name") for s in steps}
     for step in steps:
         sname = step.get("name", "(未命名步骤)")
+        dep = step.get("depends_on")
+        if dep is not None and dep not in names:
+            _invalid(case_name, sname, f"的 depends_on 指向不存在的步骤 {dep!r}")
         raw = step.get("assert") or []
         if not isinstance(raw, list):
             _invalid(case_name, sname, f"的 assert 应为列表，每项一个断言，当前是 {type(raw).__name__}")
